@@ -23,6 +23,22 @@ BIN_DIR                 ?= $(shell pwd)
 DOCKER_IMAGE_NAME       ?= node-exporter
 DOCKER_IMAGE_TAG        ?= $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
 
+# ------------ Caicloud Args ------------
+
+# This repo's root import path (under GOPATH).
+ROOT := github.com/prometheus/node_exporter
+
+# Container registry for base images.
+BASE_REGISTRY ?= cargo.caicloud.xyz/library
+
+# It's necessary to set the errexit flags for the bash shell.
+export SHELLOPTS := errexit
+
+# Current version of the project.
+VERSION ?= v0.14.0
+
+# ----------------------------------------
+
 ifeq ($(OS),Windows_NT)
     OS_detected := Windows
 else
@@ -82,5 +98,26 @@ $(GOPATH)/bin/promu promu:
 $(GOPATH)/bin/staticcheck:
 	@GOOS= GOARCH= $(GO) get -u honnef.co/go/tools/cmd/staticcheck
 
+# ------------ Caicloud Commands ------------
+
+build-linux-arm64:
+	@docker run --rm -t                                                                \
+	  -v $(PWD):/go/src/$(ROOT)                                                        \
+	  -w /go/src/$(ROOT)                                                               \
+	  -e GOOS=linux                                                                    \
+	  -e GOARCH=arm64                                                                  \
+	  -e GOPATH=/go                                                                    \
+	  -e SHELLOPTS=$(SHELLOPTS)                                                        \
+	  $(BASE_REGISTRY)/golang:1.12.12-stretch                                          \
+	     go build -o node_exporter_arm64 node_exporter.go
+
+image-arm64:
+	@docker build -f ./Dockerfile.arm64                                                \
+	  -t cargo.dev.caicloud.xyz/arm64v8/node-exporter:$(VERSION) .
+
+push-arm64:
+	@docker push cargo.dev.caicloud.xyz/arm64v8/node-exporter:$(VERSION)
+
+# -------------------------------------------
 
 .PHONY: all style format build test test-e2e vet tarball docker promu staticcheck
